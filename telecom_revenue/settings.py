@@ -10,6 +10,10 @@ SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret-key")
 DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes"}
 ALLOWED_HOSTS = ["*"]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://chinguitel-dashboard-production.up.railway.app",
+]
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
