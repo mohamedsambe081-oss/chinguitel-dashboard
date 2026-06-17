@@ -1,0 +1,189 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chinguitel — membre du groupe expresso</title>
+<link rel="stylesheet" href="{% static 'revenue/css/dashboard.css' %}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand"><img class="brand-logo-img" src="{% static 'revenue/img/chinguitel_logo.jpeg' %}" alt="Chinguitel logo"><div><div class="brand-name">Chinguitel</div><div class="brand-sub">membre du groupe expresso</div></div></div>
+  <div class="user-actions header-user-actions">
+    <span class="user-pill">Welcome {{ request.user.username }}</span>
+  </div>
+
+</header>
+{% if messages %}<section class="messages">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</section>{% endif %}
+<section class="controlbar">
+  <label>Imported file<select id="uploadId"><option value="">All files</option>{% for upload in uploads %}<option value="{{ upload.id }}" {% if latest_upload and upload.id == latest_upload.id %}selected{% endif %}>{{ upload.original_filename }}</option>{% endfor %}</select></label>
+  <form action="{% url 'revenue:delete_upload' %}" method="post" id="deleteUploadForm" class="delete-upload-form">{% csrf_token %}<input type="hidden" name="upload_id" id="deleteUploadId" value="{% if latest_upload %}{{ latest_upload.id }}{% endif %}"><button type="submit" id="deleteUploadBtn" class="danger" {% if not latest_upload %}disabled{% endif %}>Delete file</button></form>
+  <label>Date Started<input type="date" id="dateFrom"></label>
+  <label>Date End<input type="date" id="dateTo"></label>
+  <label>Analyze by<select id="periodMode"><option value="day">Day</option><option value="week" selected>Week</option><option value="month">Month</option></select></label>
+  <label>Category<select id="category"><option value="">All</option></select></label>
+  <label>Package<select id="package"><option value="">All</option></select></label>
+  <button id="applyFilters" class="apply">Apply</button>
+</section>
+<nav class="tabs">
+  <div class="sidebar-import-box">
+    <div class="sidebar-import-title">Importation</div>
+    <form action="{% url 'revenue:upload_excel' %}" method="post" enctype="multipart/form-data" class="upload-form sidebar-upload-form">{% csrf_token %}{{ form.file }}<button type="submit">Import Excel</button></form>
+  </div>
+  <button class="tab active" data-tab="overview">Overview</button>
+  <button class="tab" data-tab="subscription">Subscription</button>
+  <button class="tab" data-tab="analytics">Analytics</button>
+  <button class="tab" data-tab="ml">Machine Learning</button>
+  <button class="tab" data-tab="dailyreport">Daily Report</button>
+  <button class="tab" data-tab="weeklyreport">Weekly Report</button>
+  <button class="tab" data-tab="monthlyreport">Monthly Report</button>
+  <button class="tab" data-tab="exportselector">Export PowerPoint</button>
+  <button class="tab" data-tab="detail" id="detailTab" style="display:none">Detail</button>
+  <div class="sidebar-logout"><a class="hbtn logout-link" href="{% url 'revenue:logout' %}">Logout</a></div>
+</nav>
+<main>
+<section id="overview" class="screen active">
+  <div class="page-title"><h2>Overview</h2><p>Global KPIs · Total Revenue · Number of Packs · Number of Categories</p></div>
+  <div class="offers-grid">
+    <article class="offer purple"><span>Offer 1</span><strong id="ovPvPct">—</strong><b>PAUG Voice</b><em id="ovPvRev">—</em><small>To import</small></article>
+    <article class="offer blue"><span>Offer 2</span><strong id="ovPdPct">—</strong><b>PAUG Data</b><em id="ovPdRev">—</em><small>To import</small></article>
+    <article class="offer cyan clickable" onclick="showTab('subscription')"><span>Offer 3 — Click for details</span><strong id="ovSubPct">—</strong><b>Subscription</b><em id="ovSubRev">—</em><small>→ View full detail</small></article>
+    <article class="offer orange"><span>Offer 4</span><strong id="ovOtPct">—</strong><b>Others</b><em id="ovOtRev">—</em><small>To import</small></article>
+  </div>
+  <div class="grid g21"><article class="card"><div class="card-head"><h3>Monthly Trend by Offer</h3><small>All offers over imported period</small></div><canvas id="overLine"></canvas></article><article class="card"><div class="card-head"><h3>Global Distribution</h3><small>Share of each offer</small></div><canvas id="overDonut"></canvas></article></div>
+  <article class="card overview-variation-card">
+    <div class="card-head"><h3 id="overviewVariationTitle">Selected period vs previous period</h3><small id="overviewVariationSub">PAUG VOICE · PAUG DATA · SUBSCRIPTION · OTHERS</small></div>
+    <div class="table-wrap">
+      <table id="overviewVariationTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </article>
+  <div id="overviewDashboardPercent" class="overview-dashboard-percent">
+    <div class="page-title merged-title"><h2>Percentage Dashboard</h2><p>Package demand, revenue, Pareto 80/20 and cash cow analysis.</p></div>
+    <div class="grid two"><article class="card"><h3>Most popular package ranking (%)</h3><canvas id="demandRanking"></canvas></article><article class="card"><h3>Popularity trend over time (%)</h3><canvas id="popularityEvolution"></canvas></article></div>
+    <div class="grid two"><article class="card"><h3>Cannibalization between packages</h3><canvas id="cannibalization"></canvas></article><article class="card"><h3>Average revenue per package</h3><canvas id="avgRevenuePack"></canvas></article></div>
+    <div class="grid two"><article class="card"><h3>Total revenue by period + share %</h3><canvas id="periodRevenue"></canvas></article><article class="card"><h3>Pareto 80/20 — Revenue distribution</h3><canvas id="paretoChart"></canvas></article></div>
+    <div class="grid two"><article class="card auto-height"><h3>Package performance segmentation</h3><div class="table-wrap"><table id="segmentsTable"><thead></thead><tbody></tbody></table></div></article><article class="card auto-height"><h3>Cash Cow vs low profitability</h3><div class="table-wrap"><table id="cashLowTable"><thead></thead><tbody></tbody></table></div></article></div>
+  </div>
+</section>
+<section id="subscription" class="screen">
+  <div class="page-title"><h2>Subscription</h2><p>Category analysis · Pack analysis</p></div>
+  <div class="kpi-grid" id="subKpis"></div>
+  <div class="sub-grid"><article class="sub-card voice clickable" onclick="openDetail('VOICE')"><strong id="voicePct">—</strong><span>VOICE</span><em id="voiceRev">—</em><small>→ View detail</small></article><article class="sub-card data clickable" onclick="openDetail('DATA')"><strong id="dataPct">—</strong><span>DATA</span><em id="dataRev">—</em><small>→ View detail</small></article><article class="sub-card mix clickable" onclick="openDetail('MIX')"><strong id="mixPct">—</strong><span>MIX</span><em id="mixRev">—</em><small>→ View detail</small></article><article class="sub-card sms"><strong id="smsPct">—</strong><span>SMS</span><em id="smsRev">—</em></article><article class="sub-card others"><strong id="othersPct">—</strong><span>OTHERS</span><em id="othersRev">—</em></article></div>
+  <div class="grid g21"><article class="card"><div class="card-head"><h3>Subscription Revenue by Period</h3><small>DATA · VOICE · MIX · SMS · OTHERS</small></div><canvas id="subCat"></canvas></article><article class="card"><div class="card-head"><h3>Distribution — Reference Week</h3><small id="subDonutLbl">—</small></div><canvas id="subDonut"></canvas></article></div>
+  <div class="card"><div class="card-head"><h3>Current Week vs Previous Week Comparison</h3><small>Category comparison</small></div><div class="table-wrap"><table id="subCompare"><thead></thead><tbody></tbody></table></div></div>
+</section>
+<section id="analytics" class="screen">
+  <div class="page-title"><h2>Analytics</h2><p></p></div>
+  <div class="analysis-block"><h3 id="anKpiTitle"><span>1</span>Analytics Summary — KPI Cards</h3><div class="kpi-grid" id="anKpis"></div></div>
+
+  <article class="card full-width-chart"><h3 id="anMaTitle">Distribution — Revenue Trend with Moving Average</h3><canvas id="dailyMa"></canvas></article>
+
+  <div class="grid two">
+    <article class="card"><h3 id="anAvgTitle">Average Revenue by Selected Period</h3><canvas id="monthlyAvg"></canvas></article>
+    <article class="card"><h3 id="anRevenueBarsTitle">Pareto / Revenue Bars</h3><canvas id="anWeeklyBars"></canvas></article>
+  </div>
+
+  <article class="card full-width-chart"><h3 id="anWowTitle">Change Rate (%)</h3><canvas id="anWow"></canvas></article>
+  <article class="card full-width-chart"><h3 id="anCatVDTitle">Cash Cow — VOICE & DATA Revenue</h3><canvas id="catVD"></canvas></article>
+  <article class="card full-width-chart"><h3 id="anCatMOTitle">Cannibalization — MIX · SMS · OTHERS Revenue</h3><canvas id="catMO"></canvas></article>
+
+  <div class="grid two">
+    <article class="card"><h3>5. Top 10 DATA Packs</h3><canvas id="dataTop10"></canvas></article>
+    <article class="card"><h3>Distribution — Revenue Share by Category</h3><canvas id="anPie"></canvas></article>
+  </div>
+
+  <article class="card full-width-chart"><h3 id="anDataTop5Title">Top 5 DATA Packs — Evolution</h3><canvas id="dataTop5"></canvas></article>
+  <article class="card full-width-chart"><h3 id="anStackedTitle">Stacked Area by Period</h3><canvas id="anStacked"></canvas></article>
+
+  <div class="grid two">
+    <article class="card"><h3 id="anTableTitle">Descriptive Statistics / Period Comparison</h3><div class="table-wrap"><table id="anWowTable"><thead></thead><tbody></tbody></table></div></article>
+    <article class="card"><h3>8. Daily Heatmap — Last 12 Weeks</h3><div id="heatmap" class="heatmap"></div></article>
+  </div>
+  <article class="card"><h3 id="anTop15Title">7. Top 15 Packages — Reference Period</h3><canvas id="top15"></canvas></article>
+</section>
+
+<section id="weeklyreport" class="screen">
+  <div class="page-title weekly-title">
+    <div><h2>Weekly Report</h2><p>Dynamic weekly report · last week by default · another week can be selected</p></div>
+    <label>Choose week<select id="weeklyReportWeek"><option value="">Last week</option></select></label>
+  </div>
+  <div id="weeklyReportDeck" class="wr-deck"></div>
+</section>
+
+<section id="dailyreport" class="screen">
+  <div class="page-title weekly-title">
+    <div><h2>Daily Report</h2><p>Daily analysis for the 7 days of the selected week · Monday to Sunday</p></div>
+    <label>Choose week<select id="dailyReportWeek"><option value="">Last week</option></select></label>
+  </div>
+  <div id="dailyReportDeck" class="wr-deck"></div>
+</section>
+
+
+<section id="ml" class="screen">
+  <div class="page-title"><h2>Machine Learning</h2><p>Anomaly detection, ARIMA 3-week revenue forecasting, clustering and trend analysis.</p></div>
+  <div class="grid two"><article class="card auto-height"><h3>Anomaly Detection — anomalous packages only</h3><div class="table-wrap"><table id="mlAnomalies"><thead></thead><tbody></tbody></table></div></article><article class="card"><h3>Forecasting — ARIMA 3-week revenue forecast</h3><canvas id="mlForecast"></canvas></article></div>
+  <div class="grid two"><article class="card auto-height"><h3>Clustering — package groups</h3><div class="table-wrap"><table id="mlClusters"><thead></thead><tbody></tbody></table></div></article><article class="card auto-height"><h3>Trend Analysis</h3><div class="table-wrap"><table id="mlTrends"><thead></thead><tbody></tbody></table></div></article></div>
+</section>
+
+<section id="monthlyreport" class="screen">
+  <div class="page-title weekly-title"><div><h2>Monthly Report</h2><p>Same logic as Weekly Report, aggregated by month.</p></div><label>Choose month<select id="monthlyReportMonth"><option value="">Last month</option></select></label></div>
+  <div id="monthlyReportDeck" class="wr-deck"></div>
+</section>
+
+<section id="exportselector" class="screen">
+  <div class="page-title"><h2>PowerPoint Selection</h2><p>Choose the charts and tables to export in the PowerPoint presentation.</p></div>
+  <article class="card auto-height export-selection-card">
+    <div class="card-head">
+      <h3>All available graphs and tables</h3>
+      <small>Select only the elements you want to export into the PowerPoint template.</small>
+    </div>
+    <div class="ppt-tools-row">
+      <button type="button" class="hbtn" data-ppt-action="select-all">Select all</button>
+      <button type="button" class="hbtn" data-ppt-action="clear-all">Clear</button>
+    </div>
+    <div class="ppt-options big ppt-options-detailed" id="pptSelectionPage">
+      <label><input type="checkbox" value="kpi"> Overview — global KPI cards</label>
+      <label><input type="checkbox" value="categories"> Overview — global distribution / category share graph</label>
+      <label><input type="checkbox" value="demand"> Overview — package demand ranking graph</label>
+      <label><input type="checkbox" value="demand"> Overview — popularity, Pareto and cash-cow analytics</label>
+      <label><input type="checkbox" value="tables"> Overview — performance segmentation and cash-cow tables</label>
+      <label><input type="checkbox" value="categories"> Subscription — category analysis graph</label>
+      <label><input type="checkbox" value="packages"> Subscription — pack analysis / top packages graph</label>
+      <label><input type="checkbox" value="tables"> Subscription — current vs previous period table</label>
+      <label><input type="checkbox" value="detail_wow"> Detail — WoW % selected category full-slide graph</label>
+      <label><input type="checkbox" value="demand"> Analytics — Pareto, distribution and cannibalisation graphs</label>
+      <label><input type="checkbox" value="tables"> Analytics — descriptive/statistical tables</label>
+      <label><input type="checkbox" value="ml,anomalies"> Machine Learning — anomaly detection table</label>
+      <label><input type="checkbox" value="ml"> Machine Learning — clustering table</label>
+      <label><input type="checkbox" value="ml"> Machine Learning — trend analysis table</label>
+      <label><input type="checkbox" value="weekly_report,tables"> Weekly Report — all weekly report slides, graphs and tables</label>
+      <label><input type="checkbox" value="daily_report,tables"> Daily Report — all daily report slides, graphs and tables</label>
+      <label><input type="checkbox" value="monthly_report,tables"> Monthly Report — all monthly report slides, graphs and tables</label>
+      <label><input type="checkbox" value="tables"> Extra tables — heatmap calendar and EDA concentration</label>
+    </div>
+    <div class="ppt-modal-actions export-page-actions">
+      <button class="hbtn" id="applyPptSelection" type="button">Apply</button>
+      <button class="apply" id="exportFromSelection" type="button">Export selection</button>
+      <span id="pptSelectionStatus" class="ppt-selection-status"></span>
+    </div>
+  </article>
+</section>
+
+<section id="detail" class="screen">
+  <div class="page-title"><h2 id="detailTitle">—</h2><p id="detailSub">Revenue detail by selected category · trend filtered by Day / Week / Month · packages · statistical tables</p></div>
+  <div class="kpi-grid" id="detailKpis"></div>
+  <div class="grid g21">
+    <article class="card"><div class="card-head"><h3 id="detailLineTitle">Revenue by Week</h3><small>Real imported data</small></div><canvas id="detailLine"></canvas></article>
+    <article class="card"><div class="card-head"><h3>Top 10 Packages</h3><small>Selected category / filtered period</small></div><canvas id="detailTop"></canvas></article>
+  </div>
+  <article class="card detail-full-slide-card"><div class="card-head"><h3>WoW % — Selected Category</h3><small>Variation vs previous week</small></div><canvas id="detailWow"></canvas></article>
+  <article class="card detail-average-card"><div class="card-head"><h3>Average per Transaction</h3><small>Average ORDER_FEES amount weekly</small></div><canvas id="detailAvg"></canvas></article>
+  <article class="card auto-height"><div class="card-head"><h3 id="detailStatTitle">Full Statistical Table — by Week</h3><small>Revenue, WoW, packages and first package</small></div><div class="table-wrap"><table id="detailStat"><thead><tr><th>#</th><th>Week</th><th>Revenue (MRU)</th><th>WoW %</th><th># Packages</th><th>Package N°1</th><th>Rev. Package N°1</th></tr></thead><tbody></tbody></table></div></article>
+  <article class="card auto-height"><div class="card-head"><h3>Total by Sub-Category (Package) — Full Period</h3><small id="detailSubcatCount">—</small></div><div class="table-wrap"><table id="detailSubcat"><thead><tr><th>#</th><th>Package / Sub-Category</th><th>Total Revenue (MRU)</th><th>Share (%)</th><th>Periods</th><th>Avg / Period</th><th>Trend</th></tr></thead><tbody></tbody></table></div></article>
+</section>
+</main>
+<script src="{% static 'revenue/js/dashboard.js' %}?v=graphs_fixed_v3"></script>
+</body></html>

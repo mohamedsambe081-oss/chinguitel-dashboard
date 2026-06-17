@@ -1,0 +1,12 @@
+__pycache__/ 
+*.pyc 
+*.zip 
+db.sqlite3 
+*.pptx 
+env/ 
+media/ 
+sample_data/ 
+__pycache__/ 
+*.pyc 
+*.pptx 
+*.xlsx 
